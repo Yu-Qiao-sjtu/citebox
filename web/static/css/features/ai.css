@@ -1291,3 +1291,45 @@ html[lang^="zh"] .ai-config-details[open] .ai-collapsible-toggle::before {
     color: var(--muted);
     font-size: 0.88rem;
 }
+
+.ai-export-modal-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    width: min(960px, 100%);
+}
+
+.ai-export-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding-right: 2.6rem;
+}
+
+.ai-export-modal-head h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.ai-export-modal-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.ai-export-modal-body {
+    margin: 0;
+    max-height: calc(100vh - 13rem);
+    overflow: auto;
+    padding: 1rem 1.2rem;
+    border-radius: 14px;
+    background: rgba(var(--ink-rgb), 0.045);
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.86rem;
+    line-height: 1.65;
+    user-select: text;
+    cursor: text;
+}

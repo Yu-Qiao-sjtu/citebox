@@ -83,13 +83,123 @@
             if (els.exportBtn) {
                 els.exportBtn.addEventListener('click', function () {
                     if (self._state.conversationId) {
-                        window.location.href = '/api/ai/conversations/' + self._state.conversationId + '/export';
+                        self._openExportModal();
                     }
                 });
             }
+            this._bindExportModal();
             if (els.deleteBtn) {
                 els.deleteBtn.addEventListener('click', function () { self._handleDelete(); });
             }
+        },
+
+        _bindExportModal() {
+            const s = this._state;
+            const self = this;
+            const els = s.els;
+            if (!els.exportModal || els.exportModal.dataset.exportBound === '1') return;
+            els.exportModal.dataset.exportBound = '1';
+            if (els.exportModalClose) {
+                els.exportModalClose.addEventListener('click', function () { self._closeExportModal(); });
+            }
+            if (els.exportBackBtn) {
+                els.exportBackBtn.addEventListener('click', function () { self._closeExportModal(); });
+            }
+            if (els.exportCopyBtn) {
+                els.exportCopyBtn.addEventListener('click', function () { self._copyExport(); });
+            }
+            if (els.exportDownloadBtn) {
+                els.exportDownloadBtn.addEventListener('click', function () { self._downloadExport(); });
+            }
+            els.exportModal.addEventListener('click', function (e) {
+                if (e.target === els.exportModal) self._closeExportModal();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && !els.exportModal.classList.contains('hidden')) {
+                    self._closeExportModal();
+                }
+            });
+        },
+
+        // Render the exported markdown inside the app instead of navigating
+        // the window to the attachment response — in the desktop WebView that
+        // used to leave the user stranded with no way back.
+        async _openExportModal() {
+            const s = this._state;
+            const els = s.els;
+            if (!s.conversationId || !els.exportModal) return;
+            const btn = els.exportBtn;
+            const original = btn ? btn.textContent : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = translate('ai.btn_exporting_conversation', '导出中...');
+            }
+            try {
+                const res = await fetch('/api/ai/conversations/' + s.conversationId + '/export');
+                if (!res.ok) throw new Error('export failed');
+                const disposition = res.headers.get('Content-Disposition') || '';
+                const match = disposition.match(/filename="([^"]+)"/);
+                s.exportFilename = match ? match[1] : ('citebox-conversation-' + s.conversationId + '.md');
+                s.exportMarkdown = await res.text();
+                if (els.exportModalBody) els.exportModalBody.textContent = s.exportMarkdown;
+                els.exportModal.classList.remove('hidden');
+                if (els.exportModalBody) els.exportModalBody.scrollTop = 0;
+            } catch (err) {
+                if (window.Utils && typeof window.Utils.showToast === 'function') {
+                    window.Utils.showToast(translate('ai.msg_no_exportable_conversation', '当前还没有可导出的对话内容'), 'error');
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = original;
+                }
+            }
+        },
+
+        _closeExportModal() {
+            const els = this._state.els;
+            if (els.exportModal) els.exportModal.classList.add('hidden');
+        },
+
+        async _copyExport() {
+            const s = this._state;
+            const els = s.els;
+            const text = s.exportMarkdown || (els.exportModalBody ? els.exportModalBody.textContent : '');
+            if (!text) return;
+            let ok = false;
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    ok = true;
+                }
+            } catch (err) { ok = false; }
+            if (!ok) {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+                ta.remove();
+            }
+            if (window.Utils && typeof window.Utils.showToast === 'function') {
+                window.Utils.showToast(
+                    translate(ok ? 'msg.copy_success' : 'msg.copy_failed', ok ? '已复制' : '复制失败'),
+                    ok ? 'success' : 'error'
+                );
+            }
+        },
+
+        async _downloadExport() {
+            const s = this._state;
+            if (!s.exportMarkdown) return;
+            if (!(window.Utils && typeof window.Utils.saveBlobDownload === 'function')) return;
+            await window.Utils.saveBlobDownload(
+                new Blob([s.exportMarkdown], { type: 'text/markdown;charset=utf-8' }),
+                s.exportFilename || ('citebox-conversation-' + s.conversationId + '.md')
+            );
         },
 
         async load(conversationId) {
