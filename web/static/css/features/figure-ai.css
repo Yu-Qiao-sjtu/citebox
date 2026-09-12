@@ -267,3 +267,56 @@
         max-height: 360px;
     }
 }
+
+.figure-ai-modal-title {
+    margin: 0 2.4rem 0.4rem 0;
+    font-size: 1.05rem;
+}
+
+.figure-ai-modal-hint {
+    margin: 0 0 0.8rem;
+    color: var(--muted, #8b7e75);
+    font-size: 0.86rem;
+}
+
+.figure-batch-options {
+    display: grid;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.figure-batch-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+
+.figure-batch-progress {
+    height: 0.5rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(var(--ink-rgb, 0, 0, 0), 0.08);
+    margin-bottom: 0.8rem;
+}
+
+.figure-batch-progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent, #c17f59);
+    transition: width 0.3s ease;
+}
+
+.figure-batch-failures {
+    max-height: 12rem;
+    overflow: auto;
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+    background: rgba(var(--ink-rgb, 0, 0, 0), 0.045);
+    font-size: 0.84rem;
+}
+
+.figure-batch-failures ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.2rem;
+}
