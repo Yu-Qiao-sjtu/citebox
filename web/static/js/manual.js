@@ -52,6 +52,9 @@ const ManualPage = {
         this.pageIndicator = document.getElementById('manualPageIndicator');
         this.prevPageBtn = document.getElementById('manualPrevPageBtn');
         this.nextPageBtn = document.getElementById('manualNextPageBtn');
+        this.firstPageBtn = document.getElementById('manualFirstPageBtn');
+        this.lastPageBtn = document.getElementById('manualLastPageBtn');
+        this.pageJumpInput = document.getElementById('manualPageJumpInput');
         this.clearPageBtn = document.getElementById('manualClearPageBtn');
         this.clearAllBtn = document.getElementById('manualClearAllBtn');
         this.submitBtn = document.getElementById('manualSubmitBtn');
@@ -73,6 +76,33 @@ const ManualPage = {
             if (this.state.currentPage >= this.state.pageCount) return;
             await this.loadPage(this.state.currentPage + 1);
         });
+
+        if (this.firstPageBtn) {
+            this.firstPageBtn.addEventListener('click', async () => {
+                if (this.state.currentPage <= 1) return;
+                await this.loadPage(1);
+            });
+        }
+
+        if (this.lastPageBtn) {
+            this.lastPageBtn.addEventListener('click', async () => {
+                if (!this.state.pageCount || this.state.currentPage >= this.state.pageCount) return;
+                await this.loadPage(this.state.pageCount);
+            });
+        }
+
+        if (this.pageJumpInput) {
+            this.pageJumpInput.addEventListener('keydown', async (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                await this.jumpToPageFromInput();
+            });
+            this.pageJumpInput.addEventListener('blur', () => {
+                this.pageJumpInput.value = this.state.currentPage;
+            });
+        }
+
+        this.bindPageKeyboardShortcuts();
 
         this.clearPageBtn.addEventListener('click', async () => {
             const pageSelections = this.currentPageSelections();
@@ -222,6 +252,7 @@ const ManualPage = {
             : t('manual.msg_reading_pdf', '正在读取 PDF...');
         this.prevPageBtn.disabled = this.state.currentPage <= 1;
         this.nextPageBtn.disabled = !this.state.pageCount || this.state.currentPage >= this.state.pageCount;
+        this.syncPageNavControls(this.state.currentPage);
 
         const fullTextDisplay = paper.pdf_text
             ? t('manual.stat_fulltext_chars', '{count} 字').replace('{count}', paper.pdf_text.length.toLocaleString())
@@ -263,6 +294,53 @@ const ManualPage = {
         }
     },
 
+    bindPageKeyboardShortcuts() {
+        document.addEventListener('keydown', (event) => {
+            if (event.defaultPrevented) return;
+            if (event.ctrlKey || event.metaKey || event.altKey) return;
+            const target = event.target;
+            const tag = target && target.tagName ? target.tagName.toLowerCase() : '';
+            if (tag === 'input' || tag === 'textarea' || tag === 'select' || (target && target.isContentEditable)) return;
+            if (!this.state.pageCount) return;
+            if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
+                event.preventDefault();
+                if (this.state.currentPage > 1) this.loadPage(this.state.currentPage - 1);
+            } else if (event.key === 'ArrowRight' || event.key === 'PageDown') {
+                event.preventDefault();
+                if (this.state.currentPage < this.state.pageCount) this.loadPage(this.state.currentPage + 1);
+            }
+        });
+    },
+
+    async jumpToPageFromInput() {
+        if (!this.state.pageCount) {
+            this.pageJumpInput.value = this.state.currentPage;
+            return;
+        }
+        const raw = this.pageJumpInput.value;
+        if (raw === '') {
+            this.pageJumpInput.value = this.state.currentPage;
+            return;
+        }
+        const page = Math.floor(Number(raw));
+        if (!Number.isFinite(page) || page < 1 || (this.state.pageCount && page > this.state.pageCount)) {
+            Utils.showToast(t('shared.utils.page_validation', '请输入 1 - {total} 的页码').replace('{total}', this.state.pageCount), 'error');
+            this.pageJumpInput.value = this.state.currentPage;
+            return;
+        }
+        if (page === this.state.currentPage) {
+            this.pageJumpInput.value = page;
+            return;
+        }
+        await this.loadPage(page);
+    },
+
+    syncPageNavControls(page) {
+        if (this.firstPageBtn) this.firstPageBtn.disabled = page <= 1;
+        if (this.lastPageBtn) this.lastPageBtn.disabled = !this.state.pageCount || page >= this.state.pageCount;
+        if (this.pageJumpInput) this.pageJumpInput.value = page;
+    },
+
     async loadPage(page) {
         if (!this.state.pdfDocument || !this.state.pageCount) return;
 
@@ -274,6 +352,7 @@ const ManualPage = {
         this.pageIndicator.textContent = t('manual.page_indicator', '第 {current} / {total} 页').replace('{current}', page).replace('{total}', this.state.pageCount);
         this.prevPageBtn.disabled = page <= 1;
         this.nextPageBtn.disabled = page >= this.state.pageCount;
+        this.syncPageNavControls(page);
         this.renderCurrentPageFigures();
         this.renderSelections();
 
