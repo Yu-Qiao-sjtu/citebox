@@ -86,8 +86,8 @@ func (r *PaperRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, err
 	for _, figure := range input.Figures {
 		if _, err := tx.Exec(`
 				INSERT INTO paper_figures (
-					paper_id, filename, original_name, content_type, page_number, figure_index, parent_figure_id, subfigure_label, source, caption, bbox_json, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+					paper_id, filename, original_name, content_type, page_number, figure_index, parent_figure_id, subfigure_label, source, figure_type, caption, bbox_json, created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			`,
 			paperID,
 			figure.Filename,
@@ -98,6 +98,7 @@ func (r *PaperRepository) CreatePaper(input PaperUpsertInput) (*model.Paper, err
 			figure.ParentFigureID,
 			strings.TrimSpace(figure.SubfigureLabel),
 			firstNonEmpty(strings.TrimSpace(figure.Source), "auto"),
+			firstNonEmpty(strings.TrimSpace(figure.FigureType), "figure"),
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
@@ -289,7 +290,7 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 	rows, err := r.db.Query(`
 		SELECT
 			pf.id, pf.filename, pf.original_name, pf.content_type, pf.page_number, pf.figure_index,
-			pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text, pf.bbox_json,
+			pf.parent_figure_id, pf.subfigure_label, pf.source, pf.figure_type, pf.caption, pf.notes_text, pf.bbox_json,
 			cp.id, COALESCE(cp.name, ''), COALESCE(cp.colors_json, ''),
 			CASE WHEN cp.id IS NULL THEN 0 ELSE 1 END AS palette_count,
 			pf.created_at, pf.updated_at
@@ -322,6 +323,7 @@ func (r *PaperRepository) GetPaperDetail(id int64) (*model.Paper, error) {
 			&parentFigureID,
 			&figure.SubfigureLabel,
 			&figure.Source,
+			&figure.FigureType,
 			&figure.Caption,
 			&figure.NotesText,
 			&bboxJSON,

@@ -477,6 +477,7 @@ func (s *LibraryService) ManualExtractFigures(id int64, params ManualExtractPara
 			PageNumber:     region.PageNumber,
 			FigureIndex:    figureIndex,
 			ParentFigureID: nil,
+			FigureType:     region.FigureType,
 			SubfigureLabel: "",
 			Source:         source,
 			Caption:        caption,
@@ -638,6 +639,7 @@ func maxFigureIndex(figures []model.Figure) int {
 
 func normalizeManualRegion(region model.ManualExtractionRegion) (model.ManualExtractionRegion, error) {
 	region.Source = normalizeManualFigureSource(region.Source)
+	region.FigureType = model.NormalizeFigureType(strings.TrimSpace(region.FigureType))
 	region.Caption = strings.TrimSpace(region.Caption)
 	region.ImageData = strings.TrimSpace(region.ImageData)
 	if region.PageNumber < 1 {

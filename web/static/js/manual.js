@@ -112,6 +112,14 @@ const ManualPage = {
         });
 
         this.selectionList.addEventListener('change', (event) => {
+            const typeSelect = event.target.closest('[data-selection-field="figure_type"]');
+            if (typeSelect) {
+                const selection = this.findSelection(Number(typeSelect.dataset.selectionId));
+                if (selection) {
+                    selection.figure_type = typeSelect.value === 'graphical_abstract' ? 'graphical_abstract' : 'figure';
+                }
+                return;
+            }
             const input = event.target.closest('[data-selection-field="replace_figure_id"]');
             if (!input) return;
             const selection = this.findSelection(Number(input.dataset.selectionId));
@@ -508,6 +516,7 @@ const ManualPage = {
             width,
             height,
             caption: '',
+            figure_type: 'figure',
             replace_figure_id: null
         };
     },
@@ -578,6 +587,17 @@ const ManualPage = {
                         data-selection-field="caption"
                         data-selection-id="${selection.id}"
                     >${Utils.escapeHTML(selection.caption || '')}</textarea>
+                </label>
+                <label class="field">
+                    <span>${t('manual.selection_figure_type_label', '图片类型')}</span>
+                    <select
+                        class="form-input"
+                        data-selection-field="figure_type"
+                        data-selection-id="${selection.id}"
+                    >
+                        <option value="figure" ${selection.figure_type !== 'graphical_abstract' ? 'selected' : ''}>${t('manual.selection_figure_type_figure', 'Figure（普通图片）')}</option>
+                        <option value="graphical_abstract" ${selection.figure_type === 'graphical_abstract' ? 'selected' : ''}>${t('manual.selection_figure_type_ga', 'Graphical Abstract（图形摘要）')}</option>
+                    </select>
                 </label>
                 <label class="field">
                     <span>${t('manual.selection_replace_label', '替换已有图片')}</span>
@@ -788,6 +808,7 @@ const ManualPage = {
                     height: selection.height,
                     image_data: await this.buildSelectionImageData(selection),
                     caption: selection.caption.trim(),
+                    figure_type: selection.figure_type === 'graphical_abstract' ? 'graphical_abstract' : 'figure',
                     replace_figure_id: selection.replace_figure_id || null
                 });
             }

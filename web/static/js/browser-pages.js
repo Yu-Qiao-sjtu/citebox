@@ -125,6 +125,7 @@ const BrowserUI = {
                         ${hasPalette ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_has_palette', '有配色'))}</span>` : ''}
                         ${figure.parent_figure_id ? `<span class="figure-badge">${Utils.escapeHTML(t('figures.badge_subfigure', '子图'))}</span>` : ''}
                         ${figure.source === 'manual' ? `<span class="figure-badge">${Utils.escapeHTML(t('figures.badge_manual', '人工提取'))}</span>` : ''}
+                        ${figure.figure_type === 'graphical_abstract' ? `<span class="figure-badge figure-badge-accent">${Utils.escapeHTML(t('figures.badge_graphical_abstract', '图形摘要'))}</span>` : ''}
                     </div>
                 </div>
                 <div class="figure-preview-body">
@@ -222,7 +223,7 @@ function createFigureCollectionActions(options = {}) {
 }
 
 const FiguresPage = {
-    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', sort_by: 'created_at' } },
+    state: { page: 1, pageSize: 8, totalPages: 0, filters: { keyword: '', group_id: '', tag_id: '', figure_type: '', sort_by: 'created_at' } },
 
     async init() {
         PaperViewer.init();
@@ -238,6 +239,7 @@ const FiguresPage = {
         this.keywordInput = document.getElementById('figureKeywordInput');
         this.groupFilter = document.getElementById('figureGroupFilter');
         this.tagFilter = document.getElementById('figureTagFilter');
+        this.typeFilter = document.getElementById('figureTypeFilter');
         this.sortFilter = document.getElementById('figureSortFilter');
         this.summaryStrip = document.getElementById('figureSummaryStrip');
         this.grid = document.getElementById('figureGrid');
@@ -278,6 +280,12 @@ const FiguresPage = {
             this.state.filters.tag_id = this.tagFilter.value;
             await this.load(1);
         });
+        if (this.typeFilter) {
+            this.typeFilter.addEventListener('change', async () => {
+                this.state.filters.figure_type = this.typeFilter.value;
+                await this.load(1);
+            });
+        }
         this.sortFilter.addEventListener('change', async () => {
             this.state.filters.sort_by = this.sortFilter.value || 'created_at';
             await this.load(1);
@@ -337,6 +345,7 @@ const FiguresPage = {
             keyword: this.state.filters.keyword,
             group_id: this.state.filters.group_id,
             tag_id: this.state.filters.tag_id,
+            figure_type: this.state.filters.figure_type || '',
             sort_by: this.state.filters.sort_by
         };
     },

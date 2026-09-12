@@ -493,11 +493,16 @@ AI 流式阅读通过：
       "width": 0.46,
       "height": 0.28,
       "source": "manual",
+      "figure_type": "graphical_abstract",
       "image_data": "data:image/png;base64,..."
     }
   ]
 }
 ```
+
+字段说明：
+
+- `figure_type` 可选：`figure`（默认，普通图片）、`graphical_abstract`（图形摘要）；非法值按 `figure` 处理
 
 说明：
 
@@ -532,6 +537,7 @@ AI 流式阅读通过：
 | `keyword` | string | 文献标题、caption、图片笔记、图片标签搜索 |
 | `group_id` | int | 来源分组 |
 | `tag_id` | int | 图片标签 |
+| `figure_type` | string | 按图片类型过滤：`figure`（普通图片）、`graphical_abstract`（图形摘要）；不传不过滤 |
 | `has_notes` | bool | 仅显示带图片笔记的图片 |
 | `sort_by` | string | 可选：`updated_at` 按图片更新时间倒序；`created_at` 按图片创建时间倒序；`paper_created_at_figure_index` 按文献创建时间倒序，文献内按 `Fig 1`、`Fig 2` 顺序 |
 | `page` | int | 页码 |
@@ -548,6 +554,7 @@ AI 流式阅读通过：
 补充字段：
 
 - 图片返回里会带 `parent_figure_id` / `subfigure_label`，用于区分子图
+- 图片返回里会带 `figure_type`，用于区分普通图片与图形摘要（Graphical Abstract）
 - 如果图片已经绑定配色，还会带 `palette_count`、`palette_id`、`palette_name`、`palette_colors`
 - 顶层图片列表默认只返回主图，不返回子图
 
