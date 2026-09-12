@@ -177,6 +177,12 @@
                 stopBtn: $('stopAIReaderButton'),
                 exportBtn: $('aiExportConversation'),
                 deleteBtn: $('aiDeleteConversation'),
+                exportModal: $('aiExportModal'),
+                exportModalBody: $('aiExportModalBody'),
+                exportModalClose: $('aiExportModalClose'),
+                exportCopyBtn: $('aiExportCopyBtn'),
+                exportDownloadBtn: $('aiExportDownloadBtn'),
+                exportBackBtn: $('aiExportBackBtn'),
                 questionInput: $('aiQuestionInput'),
             });
 

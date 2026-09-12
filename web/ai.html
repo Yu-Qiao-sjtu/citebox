@@ -113,6 +113,21 @@
         </div>
     </div>
 
+    <div id="aiExportModal" class="modal-shell hidden">
+        <div class="modal-dialog ai-export-modal-dialog">
+            <button id="aiExportModalClose" class="modal-close" type="button" aria-label="关闭" data-i18n-aria-label="ai.btn_close_modal">×</button>
+            <div class="ai-export-modal-head">
+                <h3 id="aiExportModalTitle" data-i18n="ai.export_title">AI 助手对话导出</h3>
+                <div class="ai-export-modal-actions">
+                    <button id="aiExportCopyBtn" class="btn btn-outline btn-small" type="button" data-i18n="btn.copy">复制</button>
+                    <button id="aiExportDownloadBtn" class="btn btn-outline btn-small" type="button" data-i18n="ai.btn_download_md">下载 .md</button>
+                    <button id="aiExportBackBtn" class="btn btn-primary btn-small" type="button" data-i18n="btn.back">返回</button>
+                </div>
+            </div>
+            <pre id="aiExportModalBody" class="ai-export-modal-body" tabindex="0"></pre>
+        </div>
+    </div>
+
     <div id="aiGeneratedImageModal" class="modal-shell hidden">
         <div class="modal-dialog ai-image-preview-modal-dialog">
             <button class="modal-close" type="button" aria-label="关闭" data-ai-image-preview-close data-i18n-aria-label="ai.btn_close_modal">×</button>
