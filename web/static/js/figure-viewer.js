@@ -37,8 +37,25 @@ const FigureViewer = {
             this.interpretationBody = shell.querySelector('#figureInterpretationModalBody');
             this.interpretationCloseButton = shell.querySelector('#closeFigureInterpretationModal');
         }
+        this.batchModal = document.getElementById('figureBatchInterpretationModal');
+        this.batchBody = document.getElementById('figureBatchInterpretationModalBody');
+        if (!this.batchModal) {
+            const shell = document.createElement('div');
+            shell.id = 'figureBatchInterpretationModal';
+            shell.className = 'modal-shell hidden';
+            shell.innerHTML = `
+                <div class="modal-dialog figure-ai-modal-dialog">
+                    <button id="closeFigureBatchInterpretationModal" class="modal-close" type="button" aria-label="${t('shared.paper.close', '关闭')}">×</button>
+                    <div id="figureBatchInterpretationModalBody"></div>
+                </div>
+            `;
+            document.body.appendChild(shell);
+            this.batchModal = shell;
+            this.batchBody = shell.querySelector('#figureBatchInterpretationModalBody');
+        }
         if (!this.modal || this.initialized) return;
         this.initialized = true;
+        this.batchState = null;
         this.aiCache = new Map();
         this.aiCacheMaxSize = 200;
         this.activeAIByFigure = new Map();
@@ -115,6 +132,10 @@ const FigureViewer = {
             }
         });
         this.interpretationCloseButton?.addEventListener('click', () => this.closeFigureInterpretationModal());
+        document.getElementById('closeFigureBatchInterpretationModal')?.addEventListener('click', () => this.closeBatchInterpretationModal());
+        this.batchModal?.addEventListener('click', (event) => {
+            if (event.target === this.batchModal && !this.batchState?.running) this.closeBatchInterpretationModal();
+        });
         this.interpretationModal?.addEventListener('click', (event) => {
             if (event.target === this.interpretationModal) {
                 this.closeFigureInterpretationModal();
@@ -231,8 +252,29 @@ const FigureViewer = {
             if (aiButton) {
                 if (aiButton.dataset.figureAiAction === 'figure_interpretation') {
                     await this.openFigureInterpretation();
+                } else if (aiButton.dataset.figureAiAction === 'figure_batch_interpretation') {
+                    this.openBatchInterpretationModal();
                 } else {
                     await this.runAIAction(aiButton.dataset.figureAiAction);
+                }
+                return;
+            }
+
+            const batchButton = event.target.closest('[data-batch-interpretation-action]');
+            if (batchButton) {
+                if (batchButton.dataset.batchInterpretationAction === 'start') {
+                    await this.startBatchInterpretation();
+                } else if (batchButton.dataset.batchInterpretationAction === 'stop') {
+                    if (this.batchState) this.batchState.abort = true;
+                }
+                return;
+            }
+
+            const batchScopeInput = event.target.closest('[data-batch-interpretation-option]');
+            if (batchScopeInput) {
+                if (this.batchState && !this.batchState.running) {
+                    this.batchState.options[batchScopeInput.dataset.batchInterpretationOption] = batchScopeInput.value;
+                    this.renderBatchInterpretationModal();
                 }
                 return;
             }
@@ -2164,6 +2206,176 @@ const FigureViewer = {
         return { paper: latestPaper, generatedCount, failedCount };
     },
 
+    // ===== Batch figure interpretation (issue #40) =====
+
+    batchInterpretationTargets() {
+        const paper = this.currentPaperDetail();
+        const all = (paper?.figures || []).filter((figure) => !figure.parent_figure_id);
+        return all;
+    },
+
+    openBatchInterpretationModal() {
+        if (!this.batchModal || this.batchState?.running) return;
+        const all = this.batchInterpretationTargets();
+        if (!all.length) {
+            Utils.showToast(t('shared.figure.batch_no_targets', '当前文献没有可解读的图片'), 'info');
+            return;
+        }
+        this.batchState = {
+            running: false,
+            abort: false,
+            done: false,
+            options: { scope: 'missing', mode: 'append' },
+            total: all.length,
+            index: 0,
+            succeeded: 0,
+            skipped: 0,
+            failures: [],
+            currentLabel: ''
+        };
+        this.batchModal.classList.remove('hidden');
+        this.renderBatchInterpretationModal();
+    },
+
+    closeBatchInterpretationModal() {
+        if (this.batchState?.running) return;
+        this.batchState = null;
+        this.batchModal?.classList.add('hidden');
+    },
+
+    batchFigureLabel(figure) {
+        return figure.display_label || `Fig ${figure.figure_index || '-'}`;
+    },
+
+    renderBatchInterpretationModal() {
+        if (!this.batchBody || !this.batchState) return;
+        const state = this.batchState;
+        const all = this.batchInterpretationTargets();
+        const missing = all.filter((figure) => !String(figure.notes_text || '').trim()).length;
+        const selectedCount = state.options.scope === 'all' ? all.length : missing;
+
+        let content = '';
+        if (!state.running && !state.done) {
+            content = `
+                <h3 class="figure-ai-modal-title">${t('shared.figure.batch_title', '一键解读本文全部图片')}</h3>
+                <p class="figure-ai-modal-hint">${t('shared.figure.batch_cost_hint', '将按顺序调用 {count} 次模型，可随时中断。').replace('{count}', selectedCount)}</p>
+                <div class="figure-batch-options">
+                    <label class="field">
+                        <span>${t('shared.figure.batch_scope', '处理范围')}</span>
+                        <select class="form-input" data-batch-interpretation-option="scope">
+                            <option value="missing" ${state.options.scope !== 'all' ? 'selected' : ''}>${t('shared.figure.batch_scope_missing', '仅处理还没有笔记的图片（{count} 张）').replace('{count}', missing)}</option>
+                            <option value="all" ${state.options.scope === 'all' ? 'selected' : ''}>${t('shared.figure.batch_scope_all', '全部 {count} 张图片（含重新解读）').replace('{count}', all.length)}</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>${t('shared.figure.batch_note_mode', '笔记写入方式')}</span>
+                        <select class="form-input" data-batch-interpretation-option="mode">
+                            <option value="append" ${state.options.mode !== 'overwrite' ? 'selected' : ''}>${t('shared.figure.batch_mode_append', '追加到图片笔记')}</option>
+                            <option value="overwrite" ${state.options.mode === 'overwrite' ? 'selected' : ''}>${t('shared.figure.batch_mode_overwrite', '覆盖图片笔记（谨慎）')}</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="figure-batch-actions">
+                    <button class="btn btn-outline" type="button" data-figure-ai-action-close>${t('btn.close', '关闭')}</button>
+                    <button class="btn btn-primary" type="button" data-batch-interpretation-action="start" ${selectedCount ? '' : 'disabled'}>${t('shared.figure.batch_start', '开始解读')}</button>
+                </div>
+            `;
+        } else {
+            const finished = !state.running;
+            const percent = state.total ? Math.round((state.index / state.total) * 100) : 0;
+            const failures = state.failures.map((failure) => `
+                <li>${Utils.escapeHTML(failure.label)}：${Utils.escapeHTML(failure.error)}</li>
+            `).join('');
+            content = `
+                <h3 class="figure-ai-modal-title">${t('shared.figure.batch_title', '一键解读本文全部图片')}</h3>
+                <p class="figure-ai-modal-hint">
+                    ${finished
+                        ? t('shared.figure.batch_done', '解读结束：成功 {ok} 张').replace('{ok}', state.succeeded)
+                        : t('shared.figure.batch_progress', '正在解读 {current} / {total} · {label}').replace('{current}', Math.min(state.index + 1, state.total)).replace('{total}', state.total).replace('{label}', state.currentLabel)}
+                </p>
+                <div class="figure-batch-progress"><div class="figure-batch-progress-bar" style="width: ${percent}%"></div></div>
+                ${state.skipped ? `<p class="figure-ai-modal-hint">${t('shared.figure.batch_skipped', '跳过 {count} 张（已有笔记）').replace('{count}', state.skipped)}</p>` : ''}
+                ${state.failures.length ? `<div class="figure-batch-failures"><strong>${t('shared.figure.batch_failed_summary', '失败 {count} 张').replace('{count}', state.failures.length)}</strong><ul>${failures}</ul></div>` : ''}
+                <div class="figure-batch-actions">
+                    ${finished
+                        ? `<button class="btn btn-primary" type="button" id="closeFigureBatchDone">${t('btn.close', '关闭')}</button>`
+                        : `<button class="btn btn-outline" type="button" data-batch-interpretation-action="stop">${t('shared.figure.batch_interrupt', '中断')}</button>`}
+                </div>
+            `;
+        }
+        this.batchBody.innerHTML = content;
+        this.batchBody.querySelector('[data-figure-ai-action-close]')?.addEventListener('click', () => this.closeBatchInterpretationModal());
+        this.batchBody.querySelector('#closeFigureBatchDone')?.addEventListener('click', () => this.closeBatchInterpretationModal());
+    },
+
+    async startBatchInterpretation() {
+        const state = this.batchState;
+        if (!state || state.running) return;
+        const all = this.batchInterpretationTargets();
+        const targets = state.options.scope === 'all'
+            ? all
+            : all.filter((figure) => !String(figure.notes_text || '').trim());
+        if (!targets.length) {
+            Utils.showToast(t('shared.figure.batch_no_targets', '当前文献没有可解读的图片'), 'info');
+            return;
+        }
+
+        state.running = true;
+        state.abort = false;
+        state.done = false;
+        state.total = targets.length;
+        state.index = 0;
+        state.succeeded = 0;
+        state.skipped = all.length - targets.length;
+        state.failures = [];
+        this.renderBatchInterpretationModal();
+
+        const paperID = Number(this.currentFigure?.paper_id || 0);
+        let latestPaper = null;
+
+        for (const figure of targets) {
+            if (state.abort) break;
+            state.currentLabel = this.batchFigureLabel(figure);
+            this.renderBatchInterpretationModal();
+            try {
+                const result = await API.readPaperWithAI({
+                    paper_id: paperID,
+                    figure_id: figure.id,
+                    action: 'figure_interpretation',
+                    question: this.buildAIQuestion('figure_interpretation', figure)
+                });
+                const answer = String(result?.answer || '').trim();
+                if (!answer) {
+                    throw new Error(t('shared.figure.no_content_to_write', '当前没有可写入笔记的内容'));
+                }
+                const currentNotes = String(figure.notes_text || '').trim();
+                const nextNotes = state.options.mode === 'overwrite'
+                    ? answer
+                    : (currentNotes ? `${currentNotes}\n\n${answer}` : answer);
+                const payload = await API.updateFigure(figure.id, { notes_text: nextNotes });
+                if (payload?.paper) latestPaper = payload.paper;
+                figure.notes_text = nextNotes;
+                state.succeeded += 1;
+            } catch (error) {
+                state.failures.push({ label: this.batchFigureLabel(figure), error: error.message || String(error) });
+            }
+            state.index += 1;
+            this.renderBatchInterpretationModal();
+        }
+
+        state.running = false;
+        state.done = true;
+        this.renderBatchInterpretationModal();
+
+        if (latestPaper) {
+            this.syncPaperMetadata(latestPaper);
+            if (typeof this.onMetaChanged === 'function') {
+                try { await this.onMetaChanged(latestPaper); } catch (error) { /* keep summary visible */ }
+            }
+        }
+        this.render();
+    },
+
     async openNotes() {
         if (!this.currentFigure) return;
 
@@ -2557,9 +2769,11 @@ const FigureViewer = {
 
     renderAIActionButtons() {
         const aiLoading = Boolean(this.aiRequestState?.loading) || this.isCropModeEnabled();
+        const batchRunning = Boolean(this.batchState?.running);
         const interpretationActive = this.isFigureInterpretationModalOpen() && Number(this.currentFigure?.id || 0) === Number(this.interpretationFigureID || 0);
         return `
             <button class="btn btn-outline ${interpretationActive ? 'active' : ''}" type="button" data-figure-ai-action="figure_interpretation" ${aiLoading ? 'disabled' : ''}>${t('shared.figure.figure_interpretation', '图片解读')}</button>
+            <button class="btn btn-outline" type="button" data-figure-ai-action="figure_batch_interpretation" ${aiLoading || batchRunning ? 'disabled' : ''} title="${batchRunning ? t('shared.figure.batch_running_disable', '批量解读进行中') : ''}">${t('shared.figure.batch_interpretation', '解读全部图片')}</button>
             <button class="btn btn-outline ${this.activeAIAction() === 'tag_suggestion' ? 'active' : ''}" type="button" data-figure-ai-action="tag_suggestion" ${aiLoading ? 'disabled' : ''}>${t('shared.figure.tag_button', 'Tag')}</button>
             <a class="btn btn-outline" href="/ai?paper_id=${this.currentFigure?.paper_id || ''}">${t('shared.figure.free_ask', '自由提问')}</a>
         `;
