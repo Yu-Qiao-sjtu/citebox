@@ -1000,6 +1000,17 @@ func buildHandlerWithAIServices(
 		}
 	})
 
+	mux.HandleFunc("/api/settings/appearance", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settingsHandler.GetAppearanceSettings(w, r)
+		case http.MethodPut:
+			settingsHandler.UpdateAppearanceSettings(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/settings/weixin-bridge", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

@@ -32,6 +32,48 @@ func NormalizeDesktopCloseAction(action string) string {
 	}
 }
 
+const (
+	AppearanceThemeWarm  = "warm"
+	AppearanceThemeLight = "light"
+	AppearanceThemeDark  = "dark"
+
+	AppearanceLangZhCN = "zh-CN"
+	AppearanceLangEn   = "en"
+)
+
+// AppearanceSettings stores user interface preferences server-side so they
+// survive desktop relaunches, where the random loopback port makes every
+// launch a new localStorage origin. Empty fields mean "not set".
+type AppearanceSettings struct {
+	Theme    string `json:"theme"`
+	Language string `json:"language"`
+}
+
+// AppearanceSettingsUpdate is a partial update: nil fields are left
+// unchanged, empty strings clear the stored value.
+type AppearanceSettingsUpdate struct {
+	Theme    *string `json:"theme,omitempty"`
+	Language *string `json:"language,omitempty"`
+}
+
+func NormalizeAppearanceTheme(theme string) string {
+	switch theme {
+	case AppearanceThemeWarm, AppearanceThemeLight, AppearanceThemeDark:
+		return theme
+	default:
+		return ""
+	}
+}
+
+func NormalizeAppearanceLanguage(lang string) string {
+	switch lang {
+	case AppearanceLangZhCN, AppearanceLangEn:
+		return lang
+	default:
+		return ""
+	}
+}
+
 type WeixinBridgeSettings struct {
 	Enabled             bool                              `json:"enabled"`
 	DailyRecommendation WeixinDailyRecommendationSettings `json:"daily_recommendation"`

@@ -1,5 +1,6 @@
 var CiteBoxI18n = {
     STORAGE_KEY: 'citebox_lang',
+    APPEARANCE_API: '/api/settings/appearance',
     DEFAULT_LANG: 'zh-CN',
     SUPPORTED: [
         { code: 'zh-CN', label: '中文' },
@@ -19,6 +20,42 @@ var CiteBoxI18n = {
 
     set: function(lang) {
         try { localStorage.setItem(this.STORAGE_KEY, lang); } catch(e) {}
+        this.persistServer(lang);
+    },
+
+    // The desktop app starts its embedded server on a random loopback port,
+    // so every launch is a new localStorage origin and the saved language
+    // would be lost. The server-side appearance setting is the durable
+    // store; localStorage stays as the pre-paint cache and offline fallback.
+    persistServer: function(lang) {
+        try {
+            fetch(this.APPEARANCE_API, {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ language: lang })
+            }).catch(function() {});
+        } catch(e) {}
+    },
+
+    // Resolved before loadLocale so the language preference from the server
+    // wins over the per-origin localStorage cache.
+    syncLangFromServer: function() {
+        var self = this;
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = controller ? setTimeout(function() { controller.abort(); }, 2000) : null;
+        return fetch(this.APPEARANCE_API, {
+            credentials: 'same-origin',
+            signal: controller ? controller.signal : undefined
+        }).then(function(r) {
+            if (timer) clearTimeout(timer);
+            return r.ok ? r.json() : null;
+        }).then(function(data) {
+            var codes = self.SUPPORTED.map(function(item) { return item.code; });
+            if (data && data.language && codes.indexOf(data.language) !== -1 && data.language !== self.get()) {
+                try { localStorage.setItem(self.STORAGE_KEY, data.language); } catch(e) {}
+            }
+        }).catch(function() {});
     },
 
     t: function(key, fallback) {
@@ -126,9 +163,12 @@ var CiteBoxI18n = {
     init: function() {
         if (this._initPromise) return this._initPromise;
         var self = this;
-        this._initPromise = this.loadLocale().catch(function() {
-            self._ready = true;
-        }).then(function() {
+        this._initPromise = this.syncLangFromServer()
+            .then(function() {
+                return self.loadLocale();
+            }).catch(function() {
+                self._ready = true;
+            }).then(function() {
             window.t = self.t.bind(self);
             self.applyDOM();
             self.injectSwitcher();
