@@ -17,10 +17,10 @@ type assembledContext struct {
 }
 
 // assembleForTurn returns prompts ready for the LLM call. Pinned papers'
-// abstract + first ~6 KB of pdf_text are included as context. Recent messages
-// are concatenated; oldest are dropped if estimated tokens > budget.
-// attachmentBlock carries user-attached context (PDF excerpts, checked figure
-// summaries) and is inserted right before the final user question.
+// abstract + first maxPinnedBodyRunes of pdf_text are included as context.
+// Recent messages are concatenated; oldest are dropped if estimated tokens >
+// budget. attachmentBlock carries user-attached context (PDF excerpts, checked
+// figure summaries) and is inserted right before the final user question.
 //
 // Sliding-window only — summarization & evidence injection happen in sibling
 // files later (Tasks 3.2 / 3.4).
@@ -37,11 +37,16 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 				s.logger.Warn("ai_conversation: pinned paper missing", "paper_id", pp.PaperID, "error", err)
 				continue
 			}
-			body := truncateRunes(paper.PDFText, 6000)
+			body := truncateRunes(paper.PDFText, maxPinnedBodyRunes)
+			if runeLen(paper.PDFText) > maxPinnedBodyRunes {
+				// Without this hint the model treats the excerpt as the whole
+				// paper and tells the user to upload the "missing" full text.
+				body += "\n（注意：以上仅为正文开头，全文更长；Methods、Results、图注等不在其中，如需请调用文献检索工具查询。）"
+			}
 			paperBlocks = append(paperBlocks, fmt.Sprintf(
 				"### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
 				paper.Title, paper.DOI,
-				truncateRunes(paper.AbstractText, 800),
+				truncateRunes(paper.AbstractText, maxPinnedAbstractRunes),
 				body))
 		}
 		if len(paperBlocks) > 0 {
@@ -91,6 +96,14 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 		userPrompt:   userPrompt,
 	}, nil
 }
+
+// Limits for the pinned-paper block. Abstracts are short, so include them in
+// full; the body cap keeps Methods/Results reachable for a typical paper
+// while the sliding window still protects the overall token budget.
+const (
+	maxPinnedAbstractRunes = 4000
+	maxPinnedBodyRunes     = 24000
+)
 
 // Limits for user-attached context from the AI page PDF panel.
 const (
@@ -169,4 +182,8 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
+}
+
+func runeLen(s string) int {
+	return len([]rune(s))
 }
