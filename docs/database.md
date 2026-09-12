@@ -232,6 +232,7 @@ CREATE TABLE paper_figures (
     parent_figure_id INTEGER REFERENCES paper_figures(id) ON DELETE CASCADE,
     subfigure_label TEXT DEFAULT '',
     source TEXT DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
+    figure_type TEXT NOT NULL DEFAULT 'figure',
     caption TEXT DEFAULT '',
     notes_text TEXT DEFAULT '',
     bbox_json TEXT DEFAULT '',

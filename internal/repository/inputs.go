@@ -52,6 +52,7 @@ type FigureUpsertInput struct {
 	ParentFigureID *int64
 	SubfigureLabel string
 	Source         string
+	FigureType     string
 	Caption        string
 	BBoxJSON       string
 }

@@ -37,14 +37,22 @@ func (h *FigureHandler) List(w http.ResponseWriter, r *http.Request) {
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
 	hasNotesValue := strings.TrimSpace(r.URL.Query().Get("has_notes"))
 
+	// An absent figure_type means "no filter": normalizing an empty value
+	// directly would turn it into the default "figure" and hide GAs.
+	figureTypeParam := strings.TrimSpace(r.URL.Query().Get("figure_type"))
+	if figureTypeParam != "" {
+		figureTypeParam = model.NormalizeFigureType(figureTypeParam)
+	}
+
 	result, err := h.service.ListFigures(model.FigureFilter{
-		Keyword:  strings.TrimSpace(r.URL.Query().Get("keyword")),
-		GroupID:  groupID,
-		TagID:    tagID,
-		HasNotes: hasNotesValue == "1" || strings.EqualFold(hasNotesValue, "true"),
-		SortBy:   strings.TrimSpace(r.URL.Query().Get("sort_by")),
-		Page:     page,
-		PageSize: pageSize,
+		Keyword:    strings.TrimSpace(r.URL.Query().Get("keyword")),
+		GroupID:    groupID,
+		TagID:      tagID,
+		FigureType: figureTypeParam,
+		HasNotes:   hasNotesValue == "1" || strings.EqualFold(hasNotesValue, "true"),
+		SortBy:     strings.TrimSpace(r.URL.Query().Get("sort_by")),
+		Page:       page,
+		PageSize:   pageSize,
 	})
 	if err != nil {
 		sendError(w, err)

@@ -25,7 +25,7 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 	row := r.db.QueryRow(`
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text,
+			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.figure_type, pf.caption, pf.notes_text,
 			cp.id, COALESCE(cp.name, ''), COALESCE(cp.colors_json, ''),
 			CASE WHEN cp.id IS NULL THEN 0 ELSE 1 END AS palette_count,
 			pf.created_at, pf.updated_at
@@ -55,6 +55,7 @@ func (r *FigureRepository) GetFigure(id int64) (*model.FigureListItem, error) {
 		&parentFigureID,
 		&item.SubfigureLabel,
 		&item.Source,
+		&item.FigureType,
 		&item.Caption,
 		&item.NotesText,
 		&paletteID,
@@ -119,7 +120,7 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 	query := `
 		SELECT
 			pf.id, pf.paper_id, p.title, p.group_id, COALESCE(g.name, ''),
-			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.caption, pf.notes_text,
+			pf.filename, pf.page_number, pf.figure_index, pf.parent_figure_id, pf.subfigure_label, pf.source, pf.figure_type, pf.caption, pf.notes_text,
 			cp.id, COALESCE(cp.name, ''), COALESCE(cp.colors_json, ''),
 			CASE WHEN cp.id IS NULL THEN 0 ELSE 1 END AS palette_count,
 			pf.created_at, pf.updated_at
@@ -162,6 +163,7 @@ func (r *FigureRepository) ListFigures(filter model.FigureFilter) ([]model.Figur
 			&parentFigureID,
 			&item.SubfigureLabel,
 			&item.Source,
+			&item.FigureType,
 			&item.Caption,
 			&item.NotesText,
 			&paletteID,
@@ -449,8 +451,8 @@ func (r *FigureRepository) ApplyManualFigureChanges(id int64, addFigures []Figur
 	for _, figure := range addFigures {
 		if _, err := tx.Exec(`
 			INSERT INTO paper_figures (
-				paper_id, filename, original_name, content_type, page_number, figure_index, parent_figure_id, subfigure_label, source, caption, bbox_json, created_at, updated_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				paper_id, filename, original_name, content_type, page_number, figure_index, parent_figure_id, subfigure_label, source, figure_type, caption, bbox_json, created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		`,
 			id,
 			figure.Filename,
@@ -461,6 +463,7 @@ func (r *FigureRepository) ApplyManualFigureChanges(id int64, addFigures []Figur
 			figure.ParentFigureID,
 			strings.TrimSpace(figure.SubfigureLabel),
 			firstNonEmpty(strings.TrimSpace(figure.Source), "manual"),
+			firstNonEmpty(strings.TrimSpace(figure.FigureType), "figure"),
 			figure.Caption,
 			figure.BBoxJSON,
 		); err != nil {
@@ -498,6 +501,10 @@ func buildFigureWhere(filter model.FigureFilter) (string, []interface{}) {
 	if filter.TagID != nil && *filter.TagID > 0 {
 		conditions = append(conditions, "EXISTS (SELECT 1 FROM figure_tags ft WHERE ft.figure_id = pf.id AND ft.tag_id = ?)")
 		args = append(args, *filter.TagID)
+	}
+	if figureType := strings.TrimSpace(filter.FigureType); figureType != "" {
+		conditions = append(conditions, "pf.figure_type = ?")
+		args = append(args, figureType)
 	}
 	if filter.HasNotes {
 		conditions = append(conditions, "TRIM(COALESCE(pf.notes_text, '')) <> ''")

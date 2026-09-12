@@ -2,6 +2,21 @@ package model
 
 import "time"
 
+const (
+	FigureTypeFigure            = "figure"
+	FigureTypeGraphicalAbstract = "graphical_abstract"
+)
+
+// NormalizeFigureType maps unknown figure types to the plain figure default.
+func NormalizeFigureType(figureType string) string {
+	switch figureType {
+	case FigureTypeGraphicalAbstract:
+		return FigureTypeGraphicalAbstract
+	default:
+		return FigureTypeFigure
+	}
+}
+
 type FigureListItem struct {
 	ID                 int64     `json:"id"`
 	PaperID            int64     `json:"paper_id"`
@@ -18,6 +33,7 @@ type FigureListItem struct {
 	DisplayLabel       string    `json:"display_label,omitempty"`
 	ParentDisplayLabel string    `json:"parent_display_label,omitempty"`
 	Source             string    `json:"source,omitempty"`
+	FigureType         string    `json:"figure_type,omitempty"`
 	Caption            string    `json:"caption"`
 	NotesText          string    `json:"notes_text,omitempty"`
 	PaletteID          *int64    `json:"palette_id,omitempty"`
@@ -39,11 +55,12 @@ type SubfigureExtractionRegion struct {
 }
 
 type FigureFilter struct {
-	Keyword  string `json:"keyword"`
-	PaperID  *int64 `json:"paper_id,omitempty"`
-	GroupID  *int64 `json:"group_id,omitempty"`
-	TagID    *int64 `json:"tag_id,omitempty"`
-	HasNotes bool   `json:"has_notes,omitempty"`
+	Keyword    string `json:"keyword"`
+	PaperID    *int64 `json:"paper_id,omitempty"`
+	GroupID    *int64 `json:"group_id,omitempty"`
+	TagID      *int64 `json:"tag_id,omitempty"`
+	FigureType string `json:"figure_type,omitempty"`
+	HasNotes   bool   `json:"has_notes,omitempty"`
 	SortBy   string `json:"sort_by,omitempty"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"page_size"`

@@ -17,6 +17,7 @@ type Figure struct {
 	DisplayLabel       string          `json:"display_label,omitempty"`
 	ParentDisplayLabel string          `json:"parent_display_label,omitempty"`
 	Source             string          `json:"source,omitempty"`
+	FigureType         string          `json:"figure_type,omitempty"`
 	Caption            string          `json:"caption"`
 	NotesText          string          `json:"notes_text,omitempty"`
 	Tags               []Tag           `json:"tags"`
