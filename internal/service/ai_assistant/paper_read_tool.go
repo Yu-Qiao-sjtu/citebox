@@ -176,23 +176,40 @@ func fallbackPaperEvidenceMatches(paper model.Paper, limit int) []LocalEvidenceM
 	if limit <= 0 {
 		return nil
 	}
-	text := firstNonEmpty(paper.AbstractText, paper.PDFText, paper.NotesText, paper.PaperNotesText)
+	// Prefer the PDF body over the abstract: handing the model an abstract
+	// excerpt labeled as the full text made it believe the library only had
+	// the first page and ask the user to re-upload.
+	text := firstNonEmpty(paper.PDFText, paper.AbstractText, paper.NotesText, paper.PaperNotesText)
 	if text == "" {
 		return nil
 	}
 	if len([]rune(text)) > 360 {
 		text = string([]rune(text)[:360])
 	}
+	section := fallbackPaperEvidenceSection(paper)
 	return []LocalEvidenceMatch{{
-		Location: "全文",
+		Location: section,
 		Snippet: research.Snippet{
 			Text:          text,
 			SnippetKind:   "body",
-			Section:       "全文",
+			Section:       section,
 			SnippetOffset: research.SnippetOffset{Start: 0, End: len(text)},
 		},
 		Score: 1,
 	}}
+}
+
+// fallbackPaperEvidenceSection names the field the fallback drew from, so the
+// model never mistakes a keyword-miss excerpt for the whole paper.
+func fallbackPaperEvidenceSection(paper model.Paper) string {
+	switch {
+	case strings.TrimSpace(paper.PDFText) != "":
+		return "正文开头（关键词未命中，非完整全文）"
+	case strings.TrimSpace(paper.AbstractText) != "":
+		return "摘要（关键词未命中，非完整全文）"
+	default:
+		return "笔记（关键词未命中，非完整全文）"
+	}
 }
 
 func compareNote(n int) string {
