@@ -61,9 +61,9 @@ type FigureFilter struct {
 	TagID      *int64 `json:"tag_id,omitempty"`
 	FigureType string `json:"figure_type,omitempty"`
 	HasNotes   bool   `json:"has_notes,omitempty"`
-	SortBy   string `json:"sort_by,omitempty"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
+	SortBy     string `json:"sort_by,omitempty"`
+	Page       int    `json:"page"`
+	PageSize   int    `json:"page_size"`
 }
 
 type FigureListResponse struct {

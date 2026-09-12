@@ -145,8 +145,8 @@
                 els.exportModal.classList.remove('hidden');
                 if (els.exportModalBody) els.exportModalBody.scrollTop = 0;
             } catch (err) {
-                if (window.Utils && typeof window.Utils.showToast === 'function') {
-                    window.Utils.showToast(translate('ai.msg_no_exportable_conversation', '当前还没有可导出的对话内容'), 'error');
+                if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                    Utils.showToast(translate('ai.msg_no_exportable_conversation', '当前还没有可导出的对话内容'), 'error');
                 }
             } finally {
                 if (btn) {
@@ -184,8 +184,8 @@
                 try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
                 ta.remove();
             }
-            if (window.Utils && typeof window.Utils.showToast === 'function') {
-                window.Utils.showToast(
+            if (typeof Utils !== 'undefined' && typeof Utils.showToast === 'function') {
+                Utils.showToast(
                     translate(ok ? 'msg.copy_success' : 'msg.copy_failed', ok ? '已复制' : '复制失败'),
                     ok ? 'success' : 'error'
                 );
@@ -195,8 +195,8 @@
         async _downloadExport() {
             const s = this._state;
             if (!s.exportMarkdown) return;
-            if (!(window.Utils && typeof window.Utils.saveBlobDownload === 'function')) return;
-            await window.Utils.saveBlobDownload(
+            if (!(typeof Utils !== 'undefined' && typeof Utils.saveBlobDownload === 'function')) return;
+            await Utils.saveBlobDownload(
                 new Blob([s.exportMarkdown], { type: 'text/markdown;charset=utf-8' }),
                 s.exportFilename || ('citebox-conversation-' + s.conversationId + '.md')
             );

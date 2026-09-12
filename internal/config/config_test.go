@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -47,7 +48,13 @@ func TestApplyDesktopDefaultsUsesUserConfigDir(t *testing.T) {
 		t.Fatalf("ApplyDesktopDefaults() error = %v", err)
 	}
 
-	baseDir := filepath.Join(configHome, "CiteBox")
+	// XDG_CONFIG_HOME applies on Linux; macOS and Windows use their native
+	// config directories. Assert against the platform's resolved directory.
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseDir := filepath.Join(configDir, "CiteBox")
 	if cfg.UploadDir != filepath.Join(baseDir, "uploads") {
 		t.Fatalf("unexpected upload dir: %s", cfg.UploadDir)
 	}

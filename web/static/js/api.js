@@ -456,8 +456,9 @@ const API = {
         return requestJSON(`${API_BASE}/ai/codex/models`);
     },
 
-    readPaperWithAI(data) {
+    readPaperWithAI(data, options = {}) {
         return requestJSON(`${API_BASE}/ai/read`, {
+            signal: options.signal,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

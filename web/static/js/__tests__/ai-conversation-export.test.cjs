@@ -42,7 +42,6 @@ function loadView(options = {}) {
         },
         window: {
             isSecureContext: options.isSecureContext !== undefined ? options.isSecureContext : false,
-            Utils: options.utils || {},
             AIReader: {
                 toolTags: {
                     parseToolTags: () => ({ intentHint: '', sources: [], conflict: null }),
@@ -73,7 +72,10 @@ function loadView(options = {}) {
     context.document.body.owner = context.document;
     context.globalThis = context;
 
-    vm.runInNewContext(code, context, { filename: modulePath });
+    vm.createContext(context);
+    context.__utils = options.utils || {};
+    vm.runInContext('const Utils = __utils;', context);
+    vm.runInContext(code, context, { filename: modulePath });
     return { view: context.window.AIReader.view, context };
 }
 

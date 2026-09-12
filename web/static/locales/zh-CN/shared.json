@@ -1,4 +1,6 @@
 {
+    "shared.figure.batch_interrupted": "已中断，尚有 {count} 张未处理",
+    "shared.language.save_failed": "语言设置保存失败，请重试",
     "shared.utils.confirm_title": "确认",
     "shared.utils.cancel": "取消",
     "shared.utils.ok": "确定",

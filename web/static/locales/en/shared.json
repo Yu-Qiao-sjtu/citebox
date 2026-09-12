@@ -1,4 +1,6 @@
 {
+    "shared.figure.batch_interrupted": "Interrupted; {count} figures remain unprocessed.",
+    "shared.language.save_failed": "Could not save the language setting. Please try again.",
     "shared.utils.confirm_title": "Confirm",
     "shared.utils.cancel": "Cancel",
     "shared.utils.ok": "OK",

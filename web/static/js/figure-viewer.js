@@ -56,6 +56,7 @@ const FigureViewer = {
         if (!this.modal || this.initialized) return;
         this.initialized = true;
         this.batchState = null;
+        this.bindBatchInterpretationModal();
         this.aiCache = new Map();
         this.aiCacheMaxSize = 200;
         this.activeAIByFigure = new Map();
@@ -256,25 +257,6 @@ const FigureViewer = {
                     this.openBatchInterpretationModal();
                 } else {
                     await this.runAIAction(aiButton.dataset.figureAiAction);
-                }
-                return;
-            }
-
-            const batchButton = event.target.closest('[data-batch-interpretation-action]');
-            if (batchButton) {
-                if (batchButton.dataset.batchInterpretationAction === 'start') {
-                    await this.startBatchInterpretation();
-                } else if (batchButton.dataset.batchInterpretationAction === 'stop') {
-                    if (this.batchState) this.batchState.abort = true;
-                }
-                return;
-            }
-
-            const batchScopeInput = event.target.closest('[data-batch-interpretation-option]');
-            if (batchScopeInput) {
-                if (this.batchState && !this.batchState.running) {
-                    this.batchState.options[batchScopeInput.dataset.batchInterpretationOption] = batchScopeInput.value;
-                    this.renderBatchInterpretationModal();
                 }
                 return;
             }
@@ -2208,6 +2190,30 @@ const FigureViewer = {
 
     // ===== Batch figure interpretation (issue #40) =====
 
+    bindBatchInterpretationModal() {
+        this.batchBody?.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-batch-interpretation-action]');
+            if (!button) return;
+            if (button.dataset.batchInterpretationAction === 'start') {
+                await this.startBatchInterpretation();
+            } else if (button.dataset.batchInterpretationAction === 'stop') {
+                this.stopBatchInterpretation();
+            }
+        });
+        this.batchBody?.addEventListener('change', (event) => {
+            const input = event.target.closest('[data-batch-interpretation-option]');
+            if (!input || !this.batchState || this.batchState.running) return;
+            this.batchState.options[input.dataset.batchInterpretationOption] = input.value;
+            this.renderBatchInterpretationModal();
+        });
+    },
+
+    stopBatchInterpretation() {
+        if (!this.batchState?.running) return;
+        this.batchState.abort = true;
+        this.batchState.controller?.abort();
+    },
+
     batchInterpretationTargets() {
         const paper = this.currentPaperDetail();
         const all = (paper?.figures || []).filter((figure) => !figure.parent_figure_id);
@@ -2291,8 +2297,9 @@ const FigureViewer = {
                 <p class="figure-ai-modal-hint">
                     ${finished
                         ? t('shared.figure.batch_done', '解读结束：成功 {ok} 张').replace('{ok}', state.succeeded)
-                        : t('shared.figure.batch_progress', '正在解读 {current} / {total} · {label}').replace('{current}', Math.min(state.index + 1, state.total)).replace('{total}', state.total).replace('{label}', state.currentLabel)}
+                        : t('shared.figure.batch_progress', '正在解读 {current} / {total} · {label}').replace('{current}', Math.min(state.index + 1, state.total)).replace('{total}', state.total).replace('{label}', Utils.escapeHTML(state.currentLabel))}
                 </p>
+                ${state.abort ? `<p class="figure-ai-modal-hint">${t('shared.figure.batch_interrupted', '已中断，尚有 {count} 张未处理').replace('{count}', state.total - state.index)}</p>` : ''}
                 <div class="figure-batch-progress"><div class="figure-batch-progress-bar" style="width: ${percent}%"></div></div>
                 ${state.skipped ? `<p class="figure-ai-modal-hint">${t('shared.figure.batch_skipped', '跳过 {count} 张（已有笔记）').replace('{count}', state.skipped)}</p>` : ''}
                 ${state.failures.length ? `<div class="figure-batch-failures"><strong>${t('shared.figure.batch_failed_summary', '失败 {count} 张').replace('{count}', state.failures.length)}</strong><ul>${failures}</ul></div>` : ''}
@@ -2310,7 +2317,7 @@ const FigureViewer = {
 
     async startBatchInterpretation() {
         const state = this.batchState;
-        if (!state || state.running) return;
+        if (!state || state.running || state.done) return;
         const all = this.batchInterpretationTargets();
         const targets = state.options.scope === 'all'
             ? all
@@ -2328,6 +2335,7 @@ const FigureViewer = {
         state.succeeded = 0;
         state.skipped = all.length - targets.length;
         state.failures = [];
+        state.controller = new AbortController();
         this.renderBatchInterpretationModal();
 
         const paperID = Number(this.currentFigure?.paper_id || 0);
@@ -2343,7 +2351,8 @@ const FigureViewer = {
                     figure_id: figure.id,
                     action: 'figure_interpretation',
                     question: this.buildAIQuestion('figure_interpretation', figure)
-                });
+                }, { signal: state.controller.signal });
+                if (state.abort) break;
                 const answer = String(result?.answer || '').trim();
                 if (!answer) {
                     throw new Error(t('shared.figure.no_content_to_write', '当前没有可写入笔记的内容'));
@@ -2357,6 +2366,7 @@ const FigureViewer = {
                 figure.notes_text = nextNotes;
                 state.succeeded += 1;
             } catch (error) {
+                if (state.abort && error.name === 'AbortError') break;
                 state.failures.push({ label: this.batchFigureLabel(figure), error: error.message || String(error) });
             }
             state.index += 1;
@@ -2364,6 +2374,7 @@ const FigureViewer = {
         }
 
         state.running = false;
+        state.controller = null;
         state.done = true;
         this.renderBatchInterpretationModal();
 

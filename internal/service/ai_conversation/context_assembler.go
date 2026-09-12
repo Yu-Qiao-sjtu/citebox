@@ -28,41 +28,45 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	pinned []repository.AIPinnedPaper, history []repository.AIMessage,
 	userText string, attachmentBlock string, settings model.AISettings) (assembledContext, error) {
 
+	budget := settings.ContextBudgetTokens
+	if budget <= 0 {
+		budget = 32000
+	}
+	systemPrompt := strings.TrimSpace(settings.SystemPrompt)
+	summaryBlock := ""
+	if conv.SummaryText != "" {
+		summaryBlock = "对话摘要（更早的内容）：\n" + conv.SummaryText + "\n\n"
+	}
+	// Reserve mandatory input and framing before adding optional paper text.
+	// The same estimate is used below to allocate the remaining history window.
+	fixedTokens := estimateTokens(systemPrompt) + estimateTokens(summaryBlock) + estimateTokens(attachmentBlock) + estimateTokens(userText) + 200
+	pinnedBudget := budget - fixedTokens
 	pinnedBlock := ""
-	if !conv.StrictEvidence {
+	if !conv.StrictEvidence && pinnedBudget > 0 {
 		var paperBlocks []string
-		for _, pp := range pinned {
+		remaining := pinnedBudget - estimateTokens("已钉文献：\n\n")
+		for i, pp := range pinned {
 			paper, err := s.papers.GetPaperDetail(pp.PaperID)
 			if err != nil {
 				s.logger.Warn("ai_conversation: pinned paper missing", "paper_id", pp.PaperID, "error", err)
 				continue
 			}
-			body := truncateRunes(paper.PDFText, maxPinnedBodyRunes)
-			if runeLen(paper.PDFText) > maxPinnedBodyRunes {
-				// Without this hint the model treats the excerpt as the whole
-				// paper and tells the user to upload the "missing" full text.
-				body += "\n（注意：以上仅为正文开头，全文更长；Methods、Results、图注等不在其中，如需请调用文献检索工具查询。）"
+			// Share the budget across papers so the first long PDF cannot crowd
+			// out every other pinned source. Unused shares remain available.
+			block := budgetedPinnedPaperBlock(*paper, remaining/(len(pinned)-i)-10)
+			if block == "" {
+				continue
 			}
-			paperBlocks = append(paperBlocks, fmt.Sprintf(
-				"### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
-				paper.Title, paper.DOI,
-				truncateRunes(paper.AbstractText, maxPinnedAbstractRunes),
-				body))
+			paperBlocks = append(paperBlocks, block)
+			remaining -= estimateTokens(block) + 10
 		}
 		if len(paperBlocks) > 0 {
 			pinnedBlock = "已钉文献：\n\n" + strings.Join(paperBlocks, "\n\n---\n\n") + "\n\n"
 		}
 	}
 
-	// Sliding-window: keep newest history while estimated total stays within budget.
-	budget := settings.ContextBudgetTokens
-	if budget <= 0 {
-		budget = 32000
-	}
-	systemPrompt := strings.TrimSpace(settings.SystemPrompt)
-
 	var historyLines []string
-	staticBudget := estimateTokens(systemPrompt) + estimateTokens(pinnedBlock) + estimateTokens(attachmentBlock) + estimateTokens(userText) + 200
+	staticBudget := fixedTokens + estimateTokens(pinnedBlock)
 	available := budget - staticBudget
 	if available < 0 {
 		available = 0
@@ -79,10 +83,7 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 		cumulative += cost
 	}
 
-	userPrompt := pinnedBlock
-	if conv.SummaryText != "" {
-		userPrompt += "对话摘要（更早的内容）：\n" + conv.SummaryText + "\n\n"
-	}
+	userPrompt := pinnedBlock + summaryBlock
 	if len(historyLines) > 0 {
 		userPrompt += "近期对话：\n" + strings.Join(historyLines, "\n") + "\n\n"
 	}
@@ -97,13 +98,61 @@ func (s *Service) assembleForTurn(conv repository.AIConversation,
 	}, nil
 }
 
-// Limits for the pinned-paper block. Abstracts are short, so include them in
-// full; the body cap keeps Methods/Results reachable for a typical paper
-// while the sliding window still protects the overall token budget.
+// Per-paper ceilings; the available turn budget can reduce either limit.
 const (
 	maxPinnedAbstractRunes = 4000
 	maxPinnedBodyRunes     = 24000
 )
+
+// budgetedPinnedPaperBlock retains the abstract first, then includes as much
+// body text as the paper's share permits. Truncation disclosure is budgeted too.
+func budgetedPinnedPaperBlock(paper model.Paper, budget int) string {
+	abstract := []rune(strings.TrimSpace(paper.AbstractText))
+	body := []rune(strings.TrimSpace(paper.PDFText))
+	abstractLimit := min(len(abstract), maxPinnedAbstractRunes)
+	bodyLimit := min(len(body), maxPinnedBodyRunes)
+	render := func(abstractLength, bodyLength int) string {
+		abstractText := string(abstract[:abstractLength])
+		if abstractLength < len(abstract) {
+			abstractText += "…"
+		}
+		block := fmt.Sprintf("### %s\nDOI: %s\n摘要: %s\n正文片段:\n%s",
+			paper.Title, paper.DOI, abstractText, string(body[:bodyLength]))
+		if bodyLength < len(body) {
+			block += fmt.Sprintf("\n（注意：以上仅为正文开头，全文更长；已带入前 %d / %d 字符。如需其他段落，请调用文献检索工具查询，不要据此判断用户未提供全文。）", bodyLength, len(body))
+		}
+		return block
+	}
+	abstractLength := fitPinnedLength(abstractLimit, budget, func(n int) string { return render(n, 0) })
+	if abstractLength < 0 {
+		return ""
+	}
+	bodyLength := fitPinnedLength(bodyLimit, budget, func(n int) string { return render(abstractLength, n) })
+	return render(abstractLength, bodyLength)
+}
+
+// Return -1 when even the metadata and disclosure cannot fit.
+func fitPinnedLength(limit, budget int, render func(int) string) int {
+	if budget <= 0 {
+		return -1
+	}
+	if estimateTokens(render(limit)) <= budget {
+		return limit
+	}
+	if estimateTokens(render(0)) > budget {
+		return -1
+	}
+	low, high := 0, limit
+	for low < high {
+		mid := low + (high-low+1)/2
+		if estimateTokens(render(mid)) <= budget {
+			low = mid
+		} else {
+			high = mid - 1
+		}
+	}
+	return low
+}
 
 // Limits for user-attached context from the AI page PDF panel.
 const (
@@ -182,8 +231,4 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return string(r[:n]) + "…"
-}
-
-func runeLen(s string) int {
-	return len([]rune(s))
 }

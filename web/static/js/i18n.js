@@ -18,24 +18,32 @@ var CiteBoxI18n = {
         catch(e) { return this.DEFAULT_LANG; }
     },
 
-    set: function(lang) {
+    set: async function(lang) {
+        await this.persistServer(lang);
         try { localStorage.setItem(this.STORAGE_KEY, lang); } catch(e) {}
-        this.persistServer(lang);
     },
 
     // The desktop app starts its embedded server on a random loopback port,
     // so every launch is a new localStorage origin and the saved language
     // would be lost. The server-side appearance setting is the durable
     // store; localStorage stays as the pre-paint cache and offline fallback.
-    persistServer: function(lang) {
+    persistServer: async function(lang) {
+        var controller = new AbortController();
+        var timer = setTimeout(function() { controller.abort(); }, 5000);
         try {
-            fetch(this.APPEARANCE_API, {
+            var response = await fetch(this.APPEARANCE_API, {
                 method: 'PUT',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ language: lang })
-            }).catch(function() {});
-        } catch(e) {}
+                body: JSON.stringify({ language: lang }),
+                signal: controller.signal
+            });
+            // The login page can still change its local language before authentication.
+            if (response.status === 401 && /^\/login(?:\.html)?$/.test(window.location.pathname)) return;
+            if (!response.ok) throw new Error('Appearance settings save failed');
+        } finally {
+            clearTimeout(timer);
+        }
     },
 
     // Resolved before loadLocale so the language preference from the server
@@ -148,10 +156,20 @@ var CiteBoxI18n = {
             btn.textContent = item.label;
             btn.type = 'button';
             btn.setAttribute('aria-label', item.label);
-            btn.addEventListener('click', function() {
-                if (item.code !== current) {
-                    self.set(item.code);
+            btn.addEventListener('click', async function() {
+                if (item.code === current || self._savingLanguage) return;
+                self._savingLanguage = true;
+                switcher.querySelectorAll('button').forEach(function(button) { button.disabled = true; });
+                try {
+                    await self.set(item.code);
                     window.location.reload();
+                } catch (error) {
+                    var message = self.t('shared.language.save_failed', '语言设置保存失败，请重试');
+                    if (typeof Utils !== 'undefined') Utils.showToast(message, 'error');
+                    else window.alert(message);
+                } finally {
+                    self._savingLanguage = false;
+                    switcher.querySelectorAll('button').forEach(function(button) { button.disabled = false; });
                 }
             });
             switcher.appendChild(btn);
