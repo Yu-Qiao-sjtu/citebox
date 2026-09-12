@@ -31,6 +31,7 @@
   - 提取器设置：`/api/settings/extractor`
   - AI 外部搜索源设置：`/api/settings/ai-external-search`
   - 桌面端关闭行为设置：`/api/settings/desktop-close`
+  - 外观偏好设置（主题/语言）：`/api/settings/appearance`
   - 微信桥接设置：`/api/settings/weixin-bridge`
   - 今日推荐测试发图：`/api/settings/weixin-bridge/daily-recommendation/test`
   - Wolai 设置：`/api/settings/wolai`
@@ -1597,6 +1598,52 @@ Codex 桌面模型可使用以下配置；不需要也不会保存 API key：
   "success": true,
   "settings": {
     "action": "minimize"
+  }
+}
+```
+
+#### `GET /api/settings/appearance`
+
+用途：
+
+- 获取外观偏好设置（主题、界面语言）。服务端持久化，桌面端随机端口重启后依然生效
+
+返回示例：
+
+```json
+{
+  "theme": "light",
+  "language": "zh-CN"
+}
+```
+
+字段说明：
+
+- `theme` 可能是：`warm`、`light`、`dark`；空字符串表示未设置（前端回退默认暖色）
+- `language` 可能是：`zh-CN`、`en`；空字符串表示未设置
+
+#### `PUT /api/settings/appearance`
+
+用途：
+
+- 部分更新外观偏好设置：省略的字段保持不变，传空字符串清除对应偏好
+
+请求体示例：
+
+```json
+{
+  "theme": "dark"
+}
+```
+
+返回示例：
+
+```json
+{
+  "success": true,
+  "settings": {
+    "theme": "dark",
+    "language": "zh-CN"
   }
 }
 ```

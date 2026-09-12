@@ -724,6 +724,20 @@ const API = {
         });
     },
 
+    getAppearanceSettings() {
+        return requestJSON(`${API_BASE}/settings/appearance`);
+    },
+
+    updateAppearanceSettings(data) {
+        return requestJSON(`${API_BASE}/settings/appearance`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+    },
+
     getDesktopCloseSettings() {
         return requestJSON(`${API_BASE}/settings/desktop-close`);
     },

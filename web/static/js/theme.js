@@ -1,6 +1,7 @@
 if (typeof window.t !== 'function') window.t = function(k,f){return f||k};
 const CiteBoxTheme = {
     STORAGE_KEY: 'citebox_theme',
+    APPEARANCE_API: '/api/settings/appearance',
     THEMES: ['warm', 'light', 'dark'],
     LABELS: { warm: '暖色', light: '明亮', dark: '暗黑' },
     DOTS: {
@@ -13,8 +14,9 @@ const CiteBoxTheme = {
         return localStorage.getItem(this.STORAGE_KEY) || 'warm';
     },
 
-    apply(theme) {
+    apply(theme, options) {
         if (!this.THEMES.includes(theme)) theme = 'warm';
+        var persist = !options || options.persist !== false;
 
         document.documentElement.classList.add('theme-transition');
 
@@ -26,6 +28,8 @@ const CiteBoxTheme = {
 
         localStorage.setItem(this.STORAGE_KEY, theme);
 
+        if (persist) this.persistServer(theme);
+
         document.querySelectorAll('.theme-dot').forEach(function(dot) {
             dot.classList.toggle('active', dot.dataset.theme === theme);
         });
@@ -33,6 +37,38 @@ const CiteBoxTheme = {
         setTimeout(function() {
             document.documentElement.classList.remove('theme-transition');
         }, 400);
+    },
+
+    // The desktop app starts its embedded server on a random loopback port,
+    // so every launch is a new localStorage origin and the saved theme would
+    // be lost. The server-side appearance setting is the durable store;
+    // localStorage stays as the pre-paint cache and offline fallback.
+    persistServer(theme) {
+        try {
+            fetch(this.APPEARANCE_API, {
+                method: 'PUT',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme: theme })
+            }).catch(function() {});
+        } catch (e) {}
+    },
+
+    syncFromServer() {
+        var self = this;
+        var controller = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = controller ? setTimeout(function() { controller.abort(); }, 2000) : null;
+        return fetch(this.APPEARANCE_API, {
+            credentials: 'same-origin',
+            signal: controller ? controller.signal : undefined
+        }).then(function(r) {
+            if (timer) clearTimeout(timer);
+            return r.ok ? r.json() : null;
+        }).then(function(data) {
+            if (data && data.theme && self.THEMES.includes(data.theme) && data.theme !== self.get()) {
+                self.apply(data.theme, { persist: false });
+            }
+        }).catch(function() {});
     },
 
     injectSwitcher() {
@@ -62,6 +98,7 @@ const CiteBoxTheme = {
 
     init() {
         this.injectSwitcher();
+        this.syncFromServer();
     }
 };
 
